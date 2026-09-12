@@ -2,14 +2,14 @@
 
 {% hint style="warning" %}
 Every code sample on this page was run against the real deployed contract
-  (`CD25U7GYDNB7XUBEEN3OKZK2LY62ANSUJJPQ6SF2Y6DHQ5SQ3F7LSVUF` on Testnet) while writing
+  (`CD5QU2E6LOKFAZFESIZSAA4IENH5SZHJVU4Y6532WNZSXPZDYRKEEVUW` on Testnet) while writing
   this guide. The output shown is real, not invented.
 {% endhint %}
 
 ## Install
 
 ```bash
-npm install warden-sdk@github:Femology/warden-sdk#v0.2.1
+npm install warden-sdk@github:Femology/warden-sdk#v0.4.0
 ```
 
 `warden-sdk` isn't published to npm yet (tracked in
@@ -17,7 +17,7 @@ npm install warden-sdk@github:Femology/warden-sdk#v0.2.1
 dependency pinned to a tag, as shown above. ESM only, Node ≥18.
 
 {% hint style="info" %}
-Pin `v0.2.1` specifically. `v0.1.2` has a real bug where every `submit*` call throws
+Pin `v0.4.0` or later. `v0.1.2` has a real bug where every `submit*` call throws
   `"The transaction has not yet been signed"` against a live network, regardless of
   whether you signed correctly (see
   [warden-sdk#5](https://github.com/Femology/warden-sdk/pull/5)). `v0.2.0` added
@@ -25,8 +25,15 @@ Pin `v0.2.1` specifically. `v0.1.2` has a real bug where every `submit*` call th
   actually running the examples below against the live network rather than trusting the
   mocked unit tests: `trustedRecipients` decoded with the wrong keys entirely (a numeric
   index instead of the actual address), and `getPolicy` crashed instead of returning
-  `null` for a wallet with no policy set. See
-  [warden-sdk#7](https://github.com/Femology/warden-sdk/pull/7).
+  `null` for a wallet with no policy set. Fixed in `v0.2.1`
+  ([warden-sdk#7](https://github.com/Femology/warden-sdk/pull/7)). `v0.3.0` added
+  Phase 15/16 support (flagged addresses, guardian recovery) and fixed a bug affecting
+  every write call, old and new: a doomed call used to produce signable XDR anyway,
+  failing only at submission with an opaque `tx_malformed` instead of the real
+  `WardenError`
+  ([warden-sdk#8](https://github.com/Femology/warden-sdk/pull/8)). `v0.4.0` added the
+  Phase 18 "Explain this" schema/validation module covered below
+  ([warden-sdk#9](https://github.com/Femology/warden-sdk/pull/9)).
 {% endhint %}
 
 ## Configure a client
@@ -35,7 +42,7 @@ Pin `v0.2.1` specifically. `v0.1.2` has a real bug where every `submit*` call th
 import { WardenClient } from 'warden-sdk';
 
 const client = new WardenClient({
-  contractId: 'CD25U7GYDNB7XUBEEN3OKZK2LY62ANSUJJPQ6SF2Y6DHQ5SQ3F7LSVUF',
+  contractId: 'CD5QU2E6LOKFAZFESIZSAA4IENH5SZHJVU4Y6532WNZSXPZDYRKEEVUW',
   rpcUrl: 'https://soroban-testnet.stellar.org',
   networkPassphrase: 'Test SDF Network ; September 2015',
   referenceAssetDecimals: 7,
@@ -220,7 +227,7 @@ piece needs — the exact names used across `warden-app` and `warden-monitor`:
 
 | Variable | Purpose |
 |---|---|
-| `WARDEN_CONTRACT_ID` / `NEXT_PUBLIC_WARDEN_CONTRACT_ID` | `CD25U7GYDNB7XUBEEN3OKZK2LY62ANSUJJPQ6SF2Y6DHQ5SQ3F7LSVUF` |
+| `WARDEN_CONTRACT_ID` / `NEXT_PUBLIC_WARDEN_CONTRACT_ID` | `CD5QU2E6LOKFAZFESIZSAA4IENH5SZHJVU4Y6532WNZSXPZDYRKEEVUW` |
 | `WARDEN_RPC_URL` / `NEXT_PUBLIC_WARDEN_RPC_URL` | `https://soroban-testnet.stellar.org` |
 | `WARDEN_NETWORK_PASSPHRASE` / `NEXT_PUBLIC_WARDEN_NETWORK_PASSPHRASE` | `Test SDF Network ; September 2015` |
 | `WARDEN_REFERENCE_ASSET` / `NEXT_PUBLIC_WARDEN_REFERENCE_ASSET` | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
@@ -241,3 +248,37 @@ Every amount in and out of `warden-sdk` is a string like `"150.00"`, never a JS
 `number`. Converting to and from the on-chain `i128` is exact fixed-point string
 arithmetic — it never routes through `parseFloat` or `Number`. Don't parse an amount
 yourself; pass the string straight through.
+
+## Phase 18 — "Explain this"
+
+`warden-sdk` v0.4.0 added `buildExplainPrompt`, `validateExplanationResponse`, and
+`fallbackExplanation` — pure, secret-free helpers for the "Explain this" feature both
+`warden-app` and `warden-monitor` build a server route around. This is deliberately
+**not** an SDK function that calls a model itself; the actual network call (and the
+model API key) belongs entirely in each app's own server-only route, never in this
+library, since `warden-sdk` is also imported by client-side code and a key must never
+end up reachable there by accident.
+
+```ts
+import { buildExplainPrompt, validateExplanationResponse, fallbackExplanation } from 'warden-sdk';
+import type { ExplanationInput } from 'warden-sdk';
+
+const input: ExplanationInput = {
+  eventType: 'stepup_required',
+  reason: 'AmountExceeded',
+  amount: '200.00',
+};
+
+const { system, user } = buildExplainPrompt(input); // user is JSON.stringify(input), nothing else
+// ...call your model provider with `system`/`user`, then:
+const explanation = validateExplanationResponse(modelResponseJson, input);
+const result = explanation ?? fallbackExplanation(input); // never render a null result
+```
+
+`validateExplanationResponse` enforces the fixed schema (`summary`, `factors`,
+`next_steps`) exactly, and rejects a response that mentions a `StepUpReason` other than
+the one actually in `input` — the model hallucinating a reason code it was never given.
+Any deviation returns `null`; always fall back to `fallbackExplanation(input)` rather
+than rendering a null result. See `warden-app`'s and `warden-monitor`'s own
+`/api/explain` route source for a complete, real implementation calling Evomap
+(`evomap-deepseek-v4-flash`), including the fallback-on-any-failure behavior.

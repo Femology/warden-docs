@@ -23,12 +23,15 @@ the risk is real, not because the app can't tell the difference.
 Warden is an open-source risk-policy engine for Stellar smart wallets. For every
 transfer, it decides whether the wallet's ordinary signature is enough, or whether the
 transfer needs one more explicit confirmation — a **step-up**. That decision is based
-on three things:
+on four things, checked in this order:
 
-1. **The amount** — is it under the threshold you've set for "just let it through"?
-2. **The recipient** — have you sent to them recently, or trusted them explicitly?
+1. **Is the recipient flagged?** A small, admin-managed registry of known-bad
+   addresses — if the recipient is on it, step-up is required outright, regardless of
+   everything else below.
+2. **The amount** — is it under the threshold you've set for "just let it through"?
+3. **The recipient** — have you sent to them recently, or trusted them explicitly?
    Trust itself fades if you haven't paid someone in a while.
-3. **Velocity** — how much have you already sent in the last hour, and the last 24
+4. **Velocity** — how much have you already sent in the last hour, and the last 24
    hours? Two independent windows, so a fast burst is caught even when the day's total
    is nowhere near its cap.
 
@@ -36,6 +39,15 @@ on three things:
 Step-up is not an error. It's not a rejection, and it's not the app being broken.
   It's the system working correctly — friction arriving exactly where it should.
 {% endhint %}
+
+Two more things exist alongside the decision itself: a **guardian recovery**
+subsystem (a wallet owner names guardians who can, together and only after a
+timelock, restore a restricted account without the owner's own signature — see
+[`WARDEN-PROTOCOL.md`](https://github.com/Femology/warden-contract/blob/main/WARDEN-PROTOCOL.md)
+for the full state machine), and an **"Explain this"** feature that turns any
+step-up's reason code into a plain-language explanation, grounded strictly in that
+event's own on-chain facts and validated against a fixed schema before it's ever shown
+— see the [Developer guide](developer-guide.md#phase-18-explain-this).
 
 ## Why this lives on Stellar, specifically
 

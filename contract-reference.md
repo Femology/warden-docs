@@ -2,16 +2,30 @@
 
 {% hint style="info" %}
 Deployed on Stellar Testnet at
-  [`CD25U7GYDNB7XUBEEN3OKZK2LY62ANSUJJPQ6SF2Y6DHQ5SQ3F7LSVUF`](https://stellar.expert/explorer/testnet/contract/CD25U7GYDNB7XUBEEN3OKZK2LY62ANSUJJPQ6SF2Y6DHQ5SQ3F7LSVUF).
+  [`CD5QU2E6LOKFAZFESIZSAA4IENH5SZHJVU4Y6532WNZSXPZDYRKEEVUW`](https://stellar.expert/explorer/testnet/contract/CD5QU2E6LOKFAZFESIZSAA4IENH5SZHJVU4Y6532WNZSXPZDYRKEEVUW).
   Source: [`warden-contract`](https://github.com/Femology/warden-contract).
 {% endhint %}
 
 {% hint style="warning" %}
-This is the **Phase 14** contract — dual velocity windows (daily + hourly) and trust
-  decay. The previous instance
-  (`CBFQ752LFNC57U4KWDAEKNU43PLBWJ7M2B4ZRYUMCWL62JHJNUYJVMB5`) is retired: Phase 14
-  changed `Policy`'s stored shape in a way with no in-place migration (see
-  `warden-contract`'s README), so it's a new contract ID, not an upgrade of the old one.
+This is the **Phases 14+15+16** master contract — dual velocity windows and trust decay
+  (Phase 14), the flagged-address registry (Phase 15), and the guardian/recovery
+  subsystem (Phase 16), all batch-deployed together as one instance. Two earlier
+  instances are retired: the original pre-Phase-14 contract, and a Phase-14-only
+  contract that came after it. Neither Phase 15 nor 16 broke `Policy`'s stored shape —
+  they added independent storage keys — but this contract has no admin-upgrade
+  function by design, so any new function can only ever ship as a new contract ID, not
+  an in-place upgrade. See `warden-contract`'s README for the full migration history.
+{% endhint %}
+
+{% hint style="info" %}
+This page covers the functions inherited from earlier phases in full. For Phase 15
+  (flagged-address registry) and Phase 16 (guardian/recovery subsystem) specifically,
+  see [`WARDEN-PROTOCOL.md`](https://github.com/Femology/warden-contract/blob/main/WARDEN-PROTOCOL.md)
+  in `warden-contract` — the authoritative, language-neutral spec for every function,
+  data type, event, and error this contract exposes, including the account state
+  diagram and the governance process for changing any of it. This page is not
+  duplicating that content function-by-function; treat the protocol doc as the source
+  of truth for anything added since Phase 14.
 {% endhint %}
 
 ## `initialize`
@@ -157,6 +171,7 @@ pub enum StepUpReason {
     NewRecipient,
     VelocityExceeded,
     HourlyVelocityExceeded,
+    FlaggedRecipient, // Phase 15 -- see WARDEN-PROTOCOL.md
 }
 ```
 
@@ -184,6 +199,9 @@ pub enum WardenError {
     InvalidPolicyParams = 5,
     RecipientAlreadyTrusted = 6,
     RecipientNotTrusted = 7,
+    // 8 through 20 are Phase 15 (flagged-address registry) and Phase 16
+    // (guardian/recovery subsystem) -- see WARDEN-PROTOCOL.md's own error
+    // table for the full list with meanings; not duplicated here.
 }
 ```
 

@@ -1,7 +1,7 @@
 # Protocol mechanics
 
 Every number on this page is real — captured by actually calling `evaluate()` against
-the live deployed contract (`CD25U7GYDNB7XUBEEN3OKZK2LY62ANSUJJPQ6SF2Y6DHQ5SQ3F7LSVUF`
+the live deployed contract (`CD5QU2E6LOKFAZFESIZSAA4IENH5SZHJVU4Y6532WNZSXPZDYRKEEVUW`
 on Testnet), not invented for illustration.
 
 ## The `evaluate()` lifecycle
@@ -40,6 +40,16 @@ A recipient in `trusted_recipients` only counts as trusted for step 5 below if
     [Trust decay](#trust-decay) below.
 
 ### 5. Decide, checking in this exact order
+
+{% hint style="info" %}
+As of Phase 15, there's a step 0 ahead of everything below: is `recipient` present in
+  the admin-managed flagged-address registry? → `RequireStepUp(FlaggedRecipient)`,
+  regardless of amount, trust, or velocity headroom, and without consulting any of
+  them. This isn't in the original 5-step example captured below (written before
+  Phase 15 shipped) — see
+  [`WARDEN-PROTOCOL.md`](https://github.com/Femology/warden-contract/blob/main/WARDEN-PROTOCOL.md#the-evaluation-decision)
+  for the exact, current, full order including this check.
+{% endhint %}
 
 1. Is `new_recipient_requires_stepup` on, and is this recipient **not** actively
        trusted (never trusted, or trusted but decayed)? → `RequireStepUp(NewRecipient)`
