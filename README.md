@@ -26,8 +26,11 @@ transfer needs one more explicit confirmation — a **step-up**. That decision i
 on three things:
 
 1. **The amount** — is it under the threshold you've set for "just let it through"?
-2. **The recipient** — have you sent to them before, or trusted them explicitly?
-3. **Velocity** — how much have you already sent in the last 24 hours?
+2. **The recipient** — have you sent to them recently, or trusted them explicitly?
+   Trust itself fades if you haven't paid someone in a while.
+3. **Velocity** — how much have you already sent in the last hour, and the last 24
+   hours? Two independent windows, so a fast burst is caught even when the day's total
+   is nowhere near its cap.
 
 {% hint style="info" %}
 Step-up is not an error. It's not a rejection, and it's not the app being broken.
@@ -45,16 +48,18 @@ claim.
 
 ## How it works, step by step
 
-1. **A wallet owner sets a policy.** Three numbers and a toggle: the amount below which
-   no extra confirmation is needed, a daily spending cap, and whether new recipients
-   require a step-up the first time.
+1. **A wallet owner sets a policy.** The amount below which no extra confirmation is
+   needed, an hourly spending cap, a daily spending cap, whether new recipients require
+   a step-up the first time, and how long trust lasts without a payment.
 2. **The owner can trust specific recipients.** Once trusted, transfers to that address
-   skip the new-recipient check — the same idea as saving a payee.
+   skip the new-recipient check — the same idea as saving a payee. That trust fades on
+   its own if the recipient goes unpaid past the configured decay period.
 3. **A transfer is attempted.** Before it goes through, the wallet calls Warden's
    `evaluate()` function with the recipient and amount.
-4. **Warden decides**, checking in order: is this an untrusted new recipient? Is the
-   amount over the no-confirmation threshold? Would this push the day's total spend
-   over the cap? The first match wins.
+4. **Warden decides**, checking in order: is this an untrusted (or trust-decayed) new
+   recipient? Is the amount over the no-confirmation threshold? Would this push the
+   last hour's spend over its cap? Would it push the day's total spend over its cap?
+   The first match wins.
 5. **If nothing matches, the transfer proceeds** on the wallet's normal signature
    alone. **If something matches**, the wallet's own UI asks for one more explicit
    confirmation before sending — with a plain-language reason, not a generic "are you
@@ -83,8 +88,8 @@ Stated here plainly, not buried in a footnote — see each repo's own README and
 - **The step-up gate is app-enforced, not yet cryptographically enforced.** `warden-app`
   asks for a decision and refuses to proceed without confirmation in its own UI, but
   nothing on-chain yet stops a modified client from ignoring that answer.
-- **The velocity window resets on expiry, not a continuous slide.** A wallet could in
-  principle spend up to its cap right before a reset and again right after.
+- **Both velocity windows reset on expiry, not a continuous slide.** A wallet could in
+  principle spend up to a cap right before a reset and again right after.
 - **This project is unaudited.** Every repo says so directly. Don't put real funds at
   risk on this without an independent security review first.
 

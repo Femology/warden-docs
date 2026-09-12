@@ -2,8 +2,16 @@
 
 {% hint style="info" %}
 Deployed on Stellar Testnet at
-  [`CBFQ752LFNC57U4KWDAEKNU43PLBWJ7M2B4ZRYUMCWL62JHJNUYJVMB5`](https://stellar.expert/explorer/testnet/contract/CBFQ752LFNC57U4KWDAEKNU43PLBWJ7M2B4ZRYUMCWL62JHJNUYJVMB5).
+  [`CD25U7GYDNB7XUBEEN3OKZK2LY62ANSUJJPQ6SF2Y6DHQ5SQ3F7LSVUF`](https://stellar.expert/explorer/testnet/contract/CD25U7GYDNB7XUBEEN3OKZK2LY62ANSUJJPQ6SF2Y6DHQ5SQ3F7LSVUF).
   Source: [`warden-contract`](https://github.com/Femology/warden-contract).
+{% endhint %}
+
+{% hint style="warning" %}
+This is the **Phase 14** contract — dual velocity windows (daily + hourly) and trust
+  decay. The previous instance
+  (`CBFQ752LFNC57U4KWDAEKNU43PLBWJ7M2B4ZRYUMCWL62JHJNUYJVMB5`) is retired: Phase 14
+  changed `Policy`'s stored shape in a way with no in-place migration (see
+  `warden-contract`'s README), so it's a new contract ID, not an upgrade of the old one.
 {% endhint %}
 
 ## `initialize`
@@ -25,20 +33,25 @@ set_policy(
   max_no_stepup: i128,
   daily_velocity_cap: i128,
   new_recipient_requires_stepup: bool,
+  hourly_velocity_cap: i128,
+  trust_decay_seconds: u64,
 ) -> Result<(), WardenError>
 ```
 
 **Who can call it:** the wallet's own owner (`wallet.require_auth()`).
 **What triggers it:** a wallet owner setting or changing their risk tolerance — the core
 settings action.
-**Behavior:** creates a policy if none exists (with an empty trusted-recipients list),
-or updates the three fields in place if one does — `trusted_recipients` is left
-untouched by this call, managed only by the two functions below.
-**Fails with:** `InvalidPolicyParams` if `max_no_stepup < 0`, or if
-`daily_velocity_cap < max_no_stepup` (a velocity cap below the per-transfer threshold
-is nonsensical, so it's rejected, not silently clamped).
+**Behavior:** creates a policy if none exists (with an empty trusted-recipients map), or
+updates the five fields in place if one does — `trusted_recipients` is left untouched by
+this call, managed only by the two functions below.
+**Fails with:** `InvalidPolicyParams` if `max_no_stepup < 0`, if
+`daily_velocity_cap < max_no_stepup` (a velocity cap below the per-transfer threshold is
+nonsensical, so it's rejected, not silently clamped), or if `hourly_velocity_cap < 0` or
+`hourly_velocity_cap > daily_velocity_cap` (an hourly cap looser than the daily one would
+never bind, making the hourly window meaningless).
 **Emits:** `policy_set` — topics `("policy_set", wallet)`, data
-`(max_no_stepup, daily_velocity_cap, new_recipient_requires_stepup)`.
+`(max_no_stepup, daily_velocity_cap, hourly_velocity_cap, new_recipient_requires_stepup,
+trust_decay_seconds)`.
 
 ## `add_trusted_recipient`
 
@@ -49,6 +62,10 @@ add_trusted_recipient(wallet: Address, recipient: Address) -> Result<(), WardenE
 **Who can call it:** the wallet's own owner.
 **What triggers it:** the user saving a payee — the ordinary "add to trusted contacts"
 action.
+**Behavior:** stores `last_paid_at = now` for this recipient (see
+[Protocol mechanics](protocol-mechanics.md#trust-decay) for what that's for). Every
+successful `evaluate()` call to an already-trusted recipient refreshes this same
+timestamp — it isn't only set once at add-time.
 **Fails with:** `PolicyNotFound` if `set_policy` was never called first. `RecipientAlreadyTrusted`
 if already present.
 **Emits:** `recipient_trusted` — topics `("recipient_trusted", wallet)`, data `recipient`.
@@ -112,8 +129,15 @@ pub struct Policy {
     pub owner: Address,
     pub max_no_stepup: i128,
     pub daily_velocity_cap: i128,
+    pub hourly_velocity_cap: i128,
     pub new_recipient_requires_stepup: bool,
-    pub trusted_recipients: Vec<Address>,
+    // Address -> last_paid_at (unix seconds). A Map, not a Vec: this is
+    // looked up by key on every evaluate() call -- get/contains_key/set/
+    // remove is exactly Map's access pattern, and insertion order is never
+    // used anywhere, so a Vec<(Address, u64)> would only add a linear scan
+    // with no benefit.
+    pub trusted_recipients: Map<Address, u64>,
+    pub trust_decay_seconds: u64,
     pub updated_at: u64,
 }
 
@@ -132,8 +156,19 @@ pub enum StepUpReason {
     AmountExceeded,
     NewRecipient,
     VelocityExceeded,
+    HourlyVelocityExceeded,
 }
 ```
+
+{% hint style="warning" %}
+`warden-sdk` decodes `Map<Address, u64>` as `Record<string, bigint>` (address ->
+  last_paid_at) — a plain JS object, not an array. Verified against the live contract:
+  stellar-sdk's own generic scval decoder returns a Soroban map with non-string keys
+  (an `Address` is neither a plain string nor a symbol) as an array of `[key, value]`
+  tuples, not a plain object, and `warden-sdk` converts that explicitly. If you're
+  decoding the raw XDR yourself rather than going through `warden-sdk`, expect the
+  tuple-array shape, not an object.
+{% endhint %}
 
 All amounts are `i128`. No monetary value anywhere in this contract, or anything built
 on top of it, is ever represented as a float.

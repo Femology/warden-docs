@@ -1,7 +1,7 @@
 # Protocol mechanics
 
 Every number on this page is real — captured by actually calling `evaluate()` against
-the live deployed contract (`CBFQ752LFNC57U4KWDAEKNU43PLBWJ7M2B4ZRYUMCWL62JHJNUYJVMB5`
+the live deployed contract (`CD25U7GYDNB7XUBEEN3OKZK2LY62ANSUJJPQ6SF2Y6DHQ5SQ3F7LSVUF`
 on Testnet), not invented for illustration.
 
 ## The `evaluate()` lifecycle
@@ -19,34 +19,59 @@ If the wallet has never called `set_policy`, this fails with `PolicyNotFound` �
 
 `amount` must be greater than zero, or the call fails with `InvalidAmount`.
 
-### 3. Load or reset the velocity window
+### 3. Load or reset both velocity windows
 
-If 24 hours have passed since the window started, it resets: cumulative spend back
-    to zero, transaction count back to zero, a new window start time. See
-    [The velocity window](#the-velocity-window-and-its-known-limitation) below for the
-    edge case this creates.
+Two independent windows, checked and reset the same way, on different periods:
 
-### 4. Decide, checking in this exact order
+- **Hourly** — 3,600 seconds.
+- **Daily** — 86,400 seconds.
 
-1. Is `new_recipient_requires_stepup` on, and is this recipient **not** in the
-       trusted list? → `RequireStepUp(NewRecipient)`
+If a window's period has passed since its `window_start`, it resets: cumulative spend
+    back to zero, transaction count back to zero, a new window start time. See
+    [The velocity windows](#the-velocity-windows-and-their-known-limitation) below for
+    the edge case this creates.
+
+### 4. Check trust decay
+
+A recipient in `trusted_recipients` only counts as trusted for step 5 below if
+    `now - last_paid_at <= trust_decay_seconds`. Past that, they're still in the map
+    (`add`/`remove_trusted_recipient` are the only calls that add or drop entries), but
+    `evaluate()` treats them exactly like a recipient that was never trusted. See
+    [Trust decay](#trust-decay) below.
+
+### 5. Decide, checking in this exact order
+
+1. Is `new_recipient_requires_stepup` on, and is this recipient **not** actively
+       trusted (never trusted, or trusted but decayed)? → `RequireStepUp(NewRecipient)`
     2. Is `amount` over `max_no_stepup`? → `RequireStepUp(AmountExceeded)`
-    3. Would `cumulative_amount + amount` exceed `daily_velocity_cap`? →
+    3. Would `hourly_cumulative + amount` exceed `hourly_velocity_cap`? →
+       `RequireStepUp(HourlyVelocityExceeded)`
+    4. Would `daily_cumulative + amount` exceed `daily_velocity_cap`? →
        `RequireStepUp(VelocityExceeded)`
-    4. Otherwise → `Allow`
+    5. Otherwise → `Allow`
 
     The first match wins. An amount that's both over the per-transaction limit *and*
-    would exceed the velocity cap is reported as `AmountExceeded` — you'll see this
-    below.
+    would exceed a velocity cap is reported as `AmountExceeded` — you'll see this
+    below. Likewise, an amount that exceeds both windows at once is reported as
+    `HourlyVelocityExceeded` — the more specific, more immediately actionable signal
+    ("you're moving too fast right now" beats "you hit your day limit").
 
-### 5. Update velocity — always, regardless of the decision
+### 6. Update velocity — always, regardless of the decision
 
-This runs whether the result was `Allow` or `RequireStepUp`. A transfer that
-    triggered step-up and was then completed by the user still happened, and still
-    counts toward the cap. If only `Allow`-ed transfers counted, someone could reset
-    their effective velocity limit just by making every transfer trigger step-up.
+Both windows accumulate whether the result was `Allow` or `RequireStepUp`. A transfer
+    that triggered step-up and was then completed by the user still happened, and
+    still counts toward both caps. If only `Allow`-ed transfers counted, someone could
+    reset their effective velocity limit just by making every transfer trigger
+    step-up.
 
-### 6. Emit an event and return
+### 7. Refresh trust, if applicable
+
+If the recipient is in `trusted_recipients` at all (decayed or not), their
+    `last_paid_at` is refreshed to `now`. This does **not** touch the policy's own
+    `updated_at` — that field means "the owner changed their configuration," not "a
+    payment happened."
+
+### 8. Emit an event and return
 
 `evaluation_allowed` or `stepup_required`, decoded and shown live in
     [`warden-monitor`](https://github.com/Femology/warden-monitor).
@@ -54,50 +79,82 @@ This runs whether the result was `Allow` or `RequireStepUp`. A transfer that
 
 ## Worked example: a real policy, four real transfers
 
-This is an actual sequence run against the live contract. The wallet
-(`GCZLMMKEOPOG5OB5QRLGH5ZKG7ACQNKX7KTT6UTXPFHUPS7FFSFFU5YM`) set this policy:
+This is an actual sequence run against the live contract, against a freshly funded
+Testnet wallet (`GCINF4I5LDWCW2ZLJKQEBOGFBACQNUETMPN6WYIEDPSFPTOTWLPCCPRC`) so the
+velocity windows and trust state start from genuinely zero. It set this policy:
 
 ```json
 {
   "maxNoStepUp": "150",
   "dailyVelocityCap": "500",
-  "newRecipientRequiresStepUp": true
+  "hourlyVelocityCap": "200",
+  "newRecipientRequiresStepUp": true,
+  "trustDecaySeconds": 2592000
 }
 ```
 
 Then trusted one recipient (`GA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJVSGZ`).
-Four transfers followed, to that same trusted recipient:
+Four transfers followed, to that same trusted recipient, all inside the same hourly
+window:
 
-| # | Amount | Cumulative before | Decision | Why |
-|---|---|---|---|---|
-| 1 | 50.00 | 0.00001 | **Allow** | Trusted recipient, under the 150 limit, 50.00001 total is under the 500 cap |
-| 2 | 200.00 | 50.00001 | **RequireStepUp** — `AmountExceeded` | 200 is over the 150 per-transfer limit (velocity isn't even checked — amount fails first) |
-| 3 | 260.00 | 250.00001 | **RequireStepUp** — `AmountExceeded` | Same reason — 260 alone is over 150, regardless of velocity headroom |
-| 4 | 10.00 | 510.00001 | **RequireStepUp** — `VelocityExceeded` | 10 is under the 150 limit on its own, but 510.00001 + 10 = 520.00001 is over the 500 cap |
+| # | Amount | Decision | Why |
+|---|---|---|---|
+| 1 | 50.00 | **Allow** | Trusted recipient, under the 150 limit, 50 total is under both the 200 hourly and 500 daily caps |
+| 2 | 200.00 | **RequireStepUp** — `AmountExceeded` | 200 is over the 150 per-transfer limit (neither velocity window is even checked — amount fails first) |
+| 3 | 100.00 | **RequireStepUp** — `HourlyVelocityExceeded` | 100 alone is under 150, but hourly cumulative is already 50 + 200 = 250 from transfers 1–2 (both counted, even the step-up one) — 250 + 100 = 350 is over the 200 hourly cap |
+| 4 | 100.00 | **RequireStepUp** — `HourlyVelocityExceeded` | Same reason — hourly cumulative is now 350, still well over the 200 cap |
 
-Two things worth noticing in this real sequence:
+Final `getVelocity` read:
 
-- **Transfers 2 and 3 both triggered `AmountExceeded`, not `VelocityExceeded`** — even
-  though by transfer 3 the wallet was already close to its daily cap. The amount check
-  runs before the velocity check, so an over-limit single transfer is always reported
-  as `AmountExceeded`, regardless of how much velocity headroom remains.
+```json
+{ "windowStart": "1789205262", "cumulativeAmount": "450", "txCount": 4 }
+```
+
+Three things worth noticing in this real sequence:
+
+- **Transfer 2 triggered `AmountExceeded`, not a velocity reason** — even though it was
+  also large enough to blow through the hourly cap on its own. The amount check runs
+  before either velocity check, so an over-limit single transfer is always reported as
+  `AmountExceeded`, regardless of velocity headroom.
+- **The hourly cap, not the daily one, is what actually bound here.** Cumulative spend
+  (450) never got close to the 500 daily cap, but easily cleared the tighter 200 hourly
+  one — exactly the scenario a burst-detection window exists for.
 - **Every one of these four transfers added to cumulative spend**, including the three
-  that triggered step-up. Cumulative went `0.00001 → 50.00001 → 250.00001 → 510.00001
-  → 520.00001` — step-up transfers count exactly the same as allowed ones.
+  that triggered step-up. Cumulative went `0 → 50 → 250 → 350 → 450` — step-up
+  transfers count exactly the same as allowed ones.
 
-## The velocity window, and its known limitation
+## Trust decay
 
-The window is **fixed, not sliding**. It tracks a `window_start` timestamp and resets
-completely once `now - window_start >= 86400` seconds (24 hours) — it doesn't
-continuously roll the last-24-hours total forward.
+`trust_decay_seconds` (set per-wallet in `set_policy`) controls how long a trusted
+recipient stays trusted *without a payment*. `add_trusted_recipient` sets
+`last_paid_at` to the current ledger time; every successful `evaluate()` call to that
+recipient afterward refreshes it again, whatever the decision was.
+
+If `now - last_paid_at` exceeds `trust_decay_seconds`, the recipient is still present
+in `trusted_recipients` — `remove_trusted_recipient` is the only thing that drops an
+entry — but `evaluate()` treats them as if `new_recipient_requires_stepup` applied to
+them for the first time. One more payment refreshes `last_paid_at` and they're back to
+being actively trusted.
+
+This is a real design tradeoff, stated plainly: a recipient you pay often stays
+frictionless indefinitely, but one you paid once two years ago and never again goes
+back to requiring confirmation — on the theory that "trusted because you dealt with
+them recently" is a meaningfully different, safer claim than "trusted because you dealt
+with them once, ever."
+
+## The velocity windows, and their known limitation
+
+Both windows are **fixed, not sliding**. Each tracks its own `window_start` timestamp
+and resets completely once its period has elapsed (3,600s for hourly, 86,400s for
+daily) — neither continuously rolls its trailing total forward.
 
 This creates one real edge case, stated plainly rather than hidden: a wallet could
-spend right up to its daily cap in the last minute before a reset, then spend up to the
-full cap again in the first minute after — briefly doubling its effective daily limit
-across that boundary. For v1, this is a deliberate, accepted simplification, not an
-oversight. A continuously sliding window is a reasonable improvement if this edge case
-matters for a given deployment's risk tolerance — see
-[warden-contract#3](https://github.com/Femology/warden-contract/issues/3).
+spend right up to a cap in the last moment before that window resets, then spend up to
+the full cap again right after — briefly doubling its effective limit across that
+boundary. This applies independently to both windows. For v1, this is a deliberate,
+accepted simplification, not an oversight. A continuously sliding window is a
+reasonable improvement if this edge case matters for a given deployment's risk
+tolerance — see [warden-contract#3](https://github.com/Femology/warden-contract/issues/3).
 
 ## Reading a `Decision`
 
@@ -105,7 +162,7 @@ matters for a given deployment's risk tolerance — see
 
 ```
 Allow
-RequireStepUp(AmountExceeded | NewRecipient | VelocityExceeded)
+RequireStepUp(AmountExceeded | NewRecipient | VelocityExceeded | HourlyVelocityExceeded)
 ```
 
 `warden-sdk` decodes this into a TypeScript discriminated union:
@@ -113,7 +170,10 @@ RequireStepUp(AmountExceeded | NewRecipient | VelocityExceeded)
 ```ts
 type Decision =
   | { type: 'Allow' }
-  | { type: 'RequireStepUp'; reason: 'AmountExceeded' | 'NewRecipient' | 'VelocityExceeded' };
+  | {
+      type: 'RequireStepUp';
+      reason: 'AmountExceeded' | 'NewRecipient' | 'VelocityExceeded' | 'HourlyVelocityExceeded';
+    };
 ```
 
 See the [Developer guide](developer-guide.md) for real, runnable code against this exact

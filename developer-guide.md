@@ -2,14 +2,14 @@
 
 {% hint style="warning" %}
 Every code sample on this page was run against the real deployed contract
-  (`CBFQ752LFNC57U4KWDAEKNU43PLBWJ7M2B4ZRYUMCWL62JHJNUYJVMB5` on Testnet) while writing
+  (`CD25U7GYDNB7XUBEEN3OKZK2LY62ANSUJJPQ6SF2Y6DHQ5SQ3F7LSVUF` on Testnet) while writing
   this guide. The output shown is real, not invented.
 {% endhint %}
 
 ## Install
 
 ```bash
-npm install warden-sdk@github:Femology/warden-sdk#v0.1.3
+npm install warden-sdk@github:Femology/warden-sdk#v0.2.1
 ```
 
 `warden-sdk` isn't published to npm yet (tracked in
@@ -17,10 +17,16 @@ npm install warden-sdk@github:Femology/warden-sdk#v0.1.3
 dependency pinned to a tag, as shown above. ESM only, Node ≥18.
 
 {% hint style="info" %}
-Pin `v0.1.3` specifically, not an earlier tag. `v0.1.2` has a real bug where every
-  `submit*` call throws `"The transaction has not yet been signed"` against a live
-  network, regardless of whether you signed correctly — found and fixed while writing
-  this guide. See [warden-sdk#5](https://github.com/Femology/warden-sdk/pull/5).
+Pin `v0.2.1` specifically. `v0.1.2` has a real bug where every `submit*` call throws
+  `"The transaction has not yet been signed"` against a live network, regardless of
+  whether you signed correctly (see
+  [warden-sdk#5](https://github.com/Femology/warden-sdk/pull/5)). `v0.2.0` added
+  support for this contract's Phase 14 fields but had two more real bugs, both found by
+  actually running the examples below against the live network rather than trusting the
+  mocked unit tests: `trustedRecipients` decoded with the wrong keys entirely (a numeric
+  index instead of the actual address), and `getPolicy` crashed instead of returning
+  `null` for a wallet with no policy set. See
+  [warden-sdk#7](https://github.com/Femology/warden-sdk/pull/7).
 {% endhint %}
 
 ## Configure a client
@@ -29,7 +35,7 @@ Pin `v0.1.3` specifically, not an earlier tag. `v0.1.2` has a real bug where eve
 import { WardenClient } from 'warden-sdk';
 
 const client = new WardenClient({
-  contractId: 'CBFQ752LFNC57U4KWDAEKNU43PLBWJ7M2B4ZRYUMCWL62JHJNUYJVMB5',
+  contractId: 'CD25U7GYDNB7XUBEEN3OKZK2LY62ANSUJJPQ6SF2Y6DHQ5SQ3F7LSVUF',
   rpcUrl: 'https://soroban-testnet.stellar.org',
   networkPassphrase: 'Test SDF Network ; September 2015',
   referenceAssetDecimals: 7,
@@ -42,40 +48,25 @@ over the network.
 
 ## Example 1 — read a policy and velocity window
 
-This is a genuine read against the live contract, run exactly as written:
+This is a genuine read against the live contract, run exactly as written, against a
+brand-new funded Testnet wallet that has never called `set_policy`:
 
 ```ts
-const wallet = 'GCZLMMKEOPOG5OB5QRLGH5ZKG7ACQNKX7KTT6UTXPFHUPS7FFSFFU5YM';
+const wallet = 'GCINF4I5LDWCW2ZLJKQEBOGFBACQNUETMPN6WYIEDPSFPTOTWLPCCPRC';
 
 const policy = await client.getPolicy(wallet);
 console.log(policy);
-
-const velocity = await client.getVelocity(wallet);
-console.log(velocity);
 ```
 
 **Actual output:**
 
-```json
-{
-  "owner": "GCZLMMKEOPOG5OB5QRLGH5ZKG7ACQNKX7KTT6UTXPFHUPS7FFSFFU5YM",
-  "maxNoStepUp": "150",
-  "dailyVelocityCap": "500",
-  "newRecipientRequiresStepUp": true,
-  "trustedRecipients": [
-    "GA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJVSGZ"
-  ],
-  "updatedAt": "1789057652"
-}
-{
-  "windowStart": "1789052887",
-  "cumulativeAmount": "520.00001",
-  "txCount": 5
-}
+```
+null
 ```
 
-`getPolicy` returns `null` (not an error) if the wallet hasn't set one — check for that
-before assuming a policy exists.
+`getPolicy` returns `null` (not an error) if the wallet hasn't set one yet — check for
+that before assuming a policy exists. (`v0.2.0` got this wrong in practice — see the
+hint above.)
 
 ## Example 2 — set a policy (a write, signed and submitted)
 
@@ -83,6 +74,12 @@ Mutating calls follow a build → sign → submit pattern: `warden-sdk` never si
 anything itself. This example signs with a plain classic Stellar keypair, the simplest
 case (a real app signs via `passkey-kit` or another wallet signer instead — see
 [`warden-app`](https://github.com/Femology/warden-app) for that full flow).
+
+Note `PortablePolicyRule.trustedRecipients` in the shape below: it's there for symmetry
+with the `Policy` type you read back, but `set_policy` itself has no trusted-recipients
+parameter at all (see [Contract reference](contract-reference.md#set_policy)) — the
+contract preserves whatever's already stored and manages it only through
+`add_trusted_recipient`/`remove_trusted_recipient`. Passing anything here is a no-op.
 
 ```ts
 import { Keypair, TransactionBuilder } from '@stellar/stellar-sdk';
@@ -101,8 +98,10 @@ const { xdr } = await client.buildSetPolicy(wallet, {
   version: 1,
   maxAmountNoStepUp: '150.00',
   dailyVelocityCap: '500.00',
+  hourlyVelocityCap: '200.00',
   newRecipientRequiresStepUp: true,
   trustedRecipients: [],
+  trustDecaySeconds: 2_592_000, // 30 days
 });
 
 await client.submitSetPolicy(sign(xdr));
@@ -115,20 +114,67 @@ console.log('set_policy submitted.');
 set_policy submitted.
 ```
 
-Followed by a `getPolicy` call showing the values took effect — exactly the JSON shown
-in Example 1 above, since that read was captured right after this write.
+Followed by a real `getPolicy` read right after:
 
-## Example 3 — evaluate a transfer and read the decision
+```json
+{
+  "owner": "GCINF4I5LDWCW2ZLJKQEBOGFBACQNUETMPN6WYIEDPSFPTOTWLPCCPRC",
+  "maxNoStepUp": "150",
+  "dailyVelocityCap": "500",
+  "hourlyVelocityCap": "200",
+  "newRecipientRequiresStepUp": true,
+  "trustedRecipients": {},
+  "trustDecaySeconds": "2592000",
+  "updatedAt": "1789205247"
+}
+```
+
+`trustedRecipients` is empty because this is a brand-new policy — trusting a recipient
+is a separate call, next.
+
+## Example 3 — trust a recipient, then evaluate transfers
 
 ```ts
 const recipient = 'GA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJVSGZ';
 
+const { xdr } = await client.buildAddTrustedRecipient(wallet, recipient);
+await client.submitAddTrustedRecipient(sign(xdr));
+console.log('add_trusted_recipient submitted.');
+```
+
+**Actual output**, followed by a `getPolicy` read:
+
+```
+add_trusted_recipient submitted.
+```
+
+```json
+{
+  "owner": "GCINF4I5LDWCW2ZLJKQEBOGFBACQNUETMPN6WYIEDPSFPTOTWLPCCPRC",
+  "maxNoStepUp": "150",
+  "dailyVelocityCap": "500",
+  "hourlyVelocityCap": "200",
+  "newRecipientRequiresStepUp": true,
+  "trustedRecipients": {
+    "GA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJVSGZ": "1789205257"
+  },
+  "trustDecaySeconds": "2592000",
+  "updatedAt": "1789205257"
+}
+```
+
+The value against the recipient is `last_paid_at` (unix seconds) — the timestamp
+[trust decay](protocol-mechanics.md#trust-decay) measures against.
+
+Now evaluate a transfer:
+
+```ts
 const { xdr } = await client.buildEvaluate(wallet, recipient, '50.00');
 const decision = await client.submitEvaluate(sign(xdr));
 console.log(decision);
 ```
 
-**Actual output**, run against a wallet that had already trusted this recipient:
+**Actual output:**
 
 ```json
 { "type": "Allow" }
@@ -148,8 +194,8 @@ console.log(decision);
 { "type": "RequireStepUp", "reason": "AmountExceeded" }
 ```
 
-See [Protocol mechanics](protocol-mechanics.md) for the full real sequence, including a
-`VelocityExceeded` result.
+See [Protocol mechanics](protocol-mechanics.md) for the full real sequence, including
+`HourlyVelocityExceeded` and `VelocityExceeded` results.
 
 ## Handling errors
 
@@ -174,11 +220,11 @@ piece needs — the exact names used across `warden-app` and `warden-monitor`:
 
 | Variable | Purpose |
 |---|---|
-| `WARDEN_CONTRACT_ID` / `NEXT_PUBLIC_WARDEN_CONTRACT_ID` | `CBFQ752LFNC57U4KWDAEKNU43PLBWJ7M2B4ZRYUMCWL62JHJNUYJVMB5` |
+| `WARDEN_CONTRACT_ID` / `NEXT_PUBLIC_WARDEN_CONTRACT_ID` | `CD25U7GYDNB7XUBEEN3OKZK2LY62ANSUJJPQ6SF2Y6DHQ5SQ3F7LSVUF` |
 | `WARDEN_RPC_URL` / `NEXT_PUBLIC_WARDEN_RPC_URL` | `https://soroban-testnet.stellar.org` |
 | `WARDEN_NETWORK_PASSPHRASE` / `NEXT_PUBLIC_WARDEN_NETWORK_PASSPHRASE` | `Test SDF Network ; September 2015` |
 | `WARDEN_REFERENCE_ASSET` / `NEXT_PUBLIC_WARDEN_REFERENCE_ASSET` | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
-| `WARDEN_DEPLOY_LEDGER` | `4598184` — an indexer's starting point; wrong or missing, it either rescans from genesis or misses early events |
+| `WARDEN_DEPLOY_LEDGER` | `4635844` — an indexer's starting point; wrong or missing, it either rescans from genesis or misses early events |
 
 {% hint style="warning" %}
 In any Next.js app (`warden-app`, `warden-monitor`'s dashboard), `NEXT_PUBLIC_*`
