@@ -73,9 +73,8 @@ never started it.
 ## A worked example
 
 Say you set your no-confirmation amount to $150, your hourly limit to $200, your daily
-limit to $500, with new recipients requiring confirmation. This is a real sequence, not
-a made-up one — here's what actually happens across an hour of transfers to a friend
-you've already trusted:
+limit to $500, with new recipients requiring confirmation. Here's what happens across an
+hour of transfers to a friend you've already trusted:
 
 - **$50** → goes straight through. Under your limit, recipient is trusted, plenty of
   room in both your hourly and daily caps.

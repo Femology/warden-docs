@@ -17,23 +17,16 @@ npm install warden-sdk@github:Femology/warden-sdk#v0.4.0
 dependency pinned to a tag, as shown above. ESM only, Node ≥18.
 
 {% hint style="info" %}
-Pin `v0.4.0` or later. `v0.1.2` has a real bug where every `submit*` call throws
-  `"The transaction has not yet been signed"` against a live network, regardless of
-  whether you signed correctly (see
-  [warden-sdk#5](https://github.com/Femology/warden-sdk/pull/5)). `v0.2.0` added
-  support for this contract's Phase 14 fields but had two more real bugs, both found by
-  actually running the examples below against the live network rather than trusting the
-  mocked unit tests: `trustedRecipients` decoded with the wrong keys entirely (a numeric
-  index instead of the actual address), and `getPolicy` crashed instead of returning
-  `null` for a wallet with no policy set. Fixed in `v0.2.1`
-  ([warden-sdk#7](https://github.com/Femology/warden-sdk/pull/7)). `v0.3.0` added
-  Phase 15/16 support (flagged addresses, guardian recovery) and fixed a bug affecting
-  every write call, old and new: a doomed call used to produce signable XDR anyway,
-  failing only at submission with an opaque `tx_malformed` instead of the real
-  `WardenError`
-  ([warden-sdk#8](https://github.com/Femology/warden-sdk/pull/8)). `v0.4.0` added the
-  Phase 18 "Explain this" schema/validation module covered below
-  ([warden-sdk#9](https://github.com/Femology/warden-sdk/pull/9)).
+Pin `v0.4.0` or later — earlier tags have real, fixed bugs. `v0.1.2` throws
+  `"The transaction has not yet been signed"` on every `submit*` call against a live
+  network, regardless of whether you signed correctly (see
+  [warden-sdk#5](https://github.com/Femology/warden-sdk/pull/5)). Before `v0.2.1`,
+  `trustedRecipients` decoded with the wrong keys (a numeric index instead of the actual
+  address) and `getPolicy` crashed instead of returning `null` for a wallet with no
+  policy set (see [warden-sdk#7](https://github.com/Femology/warden-sdk/pull/7)). Before
+  `v0.3.0`, a doomed write call still produced signable XDR, failing only at submission
+  with an opaque `tx_malformed` instead of the real `WardenError`
+  ([warden-sdk#8](https://github.com/Femology/warden-sdk/pull/8)).
 {% endhint %}
 
 ## Configure a client
@@ -249,7 +242,7 @@ Every amount in and out of `warden-sdk` is a string like `"150.00"`, never a JS
 arithmetic — it never routes through `parseFloat` or `Number`. Don't parse an amount
 yourself; pass the string straight through.
 
-## Phase 18 — "Explain this"
+## "Explain this"
 
 `warden-sdk` v0.4.0 added `buildExplainPrompt`, `validateExplanationResponse`, and
 `fallbackExplanation` — pure, secret-free helpers for the "Explain this" feature both

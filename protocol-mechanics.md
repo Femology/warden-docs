@@ -42,11 +42,10 @@ A recipient in `trusted_recipients` only counts as trusted for step 5 below if
 ### 5. Decide, checking in this exact order
 
 {% hint style="info" %}
-As of Phase 15, there's a step 0 ahead of everything below: is `recipient` present in
-  the admin-managed flagged-address registry? → `RequireStepUp(FlaggedRecipient)`,
+There's a step 0 ahead of everything below: is `recipient` present in the
+  admin-managed flagged-address registry? → `RequireStepUp(FlaggedRecipient)`,
   regardless of amount, trust, or velocity headroom, and without consulting any of
-  them. This isn't in the original 5-step example captured below (written before
-  Phase 15 shipped) — see
+  them. See
   [`WARDEN-PROTOCOL.md`](https://github.com/Femology/warden-contract/blob/main/WARDEN-PROTOCOL.md#the-evaluation-decision)
   for the exact, current, full order including this check.
 {% endhint %}
@@ -146,11 +145,10 @@ entry — but `evaluate()` treats them as if `new_recipient_requires_stepup` app
 them for the first time. One more payment refreshes `last_paid_at` and they're back to
 being actively trusted.
 
-This is a real design tradeoff, stated plainly: a recipient you pay often stays
-frictionless indefinitely, but one you paid once two years ago and never again goes
-back to requiring confirmation — on the theory that "trusted because you dealt with
-them recently" is a meaningfully different, safer claim than "trusted because you dealt
-with them once, ever."
+The tradeoff: a recipient you pay often stays frictionless indefinitely, but one you
+paid once two years ago and never again goes back to requiring confirmation — "trusted
+because you dealt with them recently" is a meaningfully different, safer claim than
+"trusted because you dealt with them once, ever."
 
 ## The velocity windows, and their known limitation
 
@@ -158,13 +156,12 @@ Both windows are **fixed, not sliding**. Each tracks its own `window_start` time
 and resets completely once its period has elapsed (3,600s for hourly, 86,400s for
 daily) — neither continuously rolls its trailing total forward.
 
-This creates one real edge case, stated plainly rather than hidden: a wallet could
-spend right up to a cap in the last moment before that window resets, then spend up to
-the full cap again right after — briefly doubling its effective limit across that
-boundary. This applies independently to both windows. For v1, this is a deliberate,
-accepted simplification, not an oversight. A continuously sliding window is a
-reasonable improvement if this edge case matters for a given deployment's risk
-tolerance — see [warden-contract#3](https://github.com/Femology/warden-contract/issues/3).
+This creates one known edge case: a wallet could spend right up to a cap in the last
+moment before that window resets, then spend up to the full cap again right after —
+briefly doubling its effective limit across that boundary. This applies independently
+to both windows. It's an accepted simplification for now — a continuously sliding
+window is a reasonable improvement if it matters for a given deployment's risk
+tolerance. See [warden-contract#3](https://github.com/Femology/warden-contract/issues/3).
 
 ## Reading a `Decision`
 
