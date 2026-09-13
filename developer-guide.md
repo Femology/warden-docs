@@ -13,11 +13,11 @@ npm install warden-sdk@github:Femology/warden-sdk#v0.4.0
 ```
 
 `warden-sdk` isn't published to npm yet (tracked in
-[warden-sdk#2](https://github.com/Femology/warden-sdk/issues/2)) — install it as a git
+[warden-sdk#2](https://github.com/Femology/warden-sdk/issues/2)), so install it as a git
 dependency pinned to a tag, as shown above. ESM only, Node ≥18.
 
 {% hint style="info" %}
-Pin `v0.4.0` or later — earlier tags have real, fixed bugs. `v0.1.2` throws
+Pin `v0.4.0` or later; earlier tags have real, fixed bugs. `v0.1.2` throws
   `"The transaction has not yet been signed"` on every `submit*` call against a live
   network, regardless of whether you signed correctly (see
   [warden-sdk#5](https://github.com/Femology/warden-sdk/pull/5)). Before `v0.2.1`,
@@ -43,10 +43,10 @@ const client = new WardenClient({
 ```
 
 `referenceAssetDecimals` is `7` because the reference asset for this deployment is
-native XLM's Stellar Asset Contract — a config value, not something the SDK looks up
+native XLM's Stellar Asset Contract, a config value, not something the SDK looks up
 over the network.
 
-## Example 1 — read a policy and velocity window
+## Example 1: read a policy and velocity window
 
 This is a genuine read against the live contract, run exactly as written, against a
 brand-new funded Testnet wallet that has never called `set_policy`:
@@ -64,20 +64,20 @@ console.log(policy);
 null
 ```
 
-`getPolicy` returns `null` (not an error) if the wallet hasn't set one yet — check for
-that before assuming a policy exists. (`v0.2.0` got this wrong in practice — see the
+`getPolicy` returns `null` (not an error) if the wallet hasn't set one yet, so check for
+that before assuming a policy exists. (`v0.2.0` got this wrong in practice; see the
 hint above.)
 
-## Example 2 — set a policy (a write, signed and submitted)
+## Example 2: set a policy (a write, signed and submitted)
 
 Mutating calls follow a build → sign → submit pattern: `warden-sdk` never signs
 anything itself. This example signs with a plain classic Stellar keypair, the simplest
-case (a real app signs via `passkey-kit` or another wallet signer instead — see
+case (a real app signs via `passkey-kit` or another wallet signer instead; see
 [`warden-app`](https://github.com/Femology/warden-app) for that full flow).
 
 Note `PortablePolicyRule.trustedRecipients` in the shape below: it's there for symmetry
 with the `Policy` type you read back, but `set_policy` itself has no trusted-recipients
-parameter at all (see [Contract reference](contract-reference.md#set_policy)) — the
+parameter at all (see [Contract reference](contract-reference.md#set_policy)); the
 contract preserves whatever's already stored and manages it only through
 `add_trusted_recipient`/`remove_trusted_recipient`. Passing anything here is a no-op.
 
@@ -129,10 +129,10 @@ Followed by a real `getPolicy` read right after:
 }
 ```
 
-`trustedRecipients` is empty because this is a brand-new policy — trusting a recipient
+`trustedRecipients` is empty because this is a brand-new policy; trusting a recipient
 is a separate call, next.
 
-## Example 3 — trust a recipient, then evaluate transfers
+## Example 3: trust a recipient, then evaluate transfers
 
 ```ts
 const recipient = 'GA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJVSGZ';
@@ -163,7 +163,7 @@ add_trusted_recipient submitted.
 }
 ```
 
-The value against the recipient is `last_paid_at` (unix seconds) — the timestamp
+The value against the recipient is `last_paid_at` (unix seconds), the timestamp
 [trust decay](protocol-mechanics.md#trust-decay) measures against.
 
 Now evaluate a transfer:
@@ -216,7 +216,7 @@ try {
 ## Environment variables
 
 If you're wiring Warden into an app rather than a script, these are the values every
-piece needs — the exact names used across `warden-app` and `warden-monitor`:
+piece needs, the exact names used across `warden-app` and `warden-monitor`:
 
 | Variable | Purpose |
 |---|---|
@@ -224,12 +224,12 @@ piece needs — the exact names used across `warden-app` and `warden-monitor`:
 | `WARDEN_RPC_URL` / `NEXT_PUBLIC_WARDEN_RPC_URL` | `https://soroban-testnet.stellar.org` |
 | `WARDEN_NETWORK_PASSPHRASE` / `NEXT_PUBLIC_WARDEN_NETWORK_PASSPHRASE` | `Test SDF Network ; September 2015` |
 | `WARDEN_REFERENCE_ASSET` / `NEXT_PUBLIC_WARDEN_REFERENCE_ASSET` | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
-| `WARDEN_DEPLOY_LEDGER` | `4635844` — an indexer's starting point; wrong or missing, it either rescans from genesis or misses early events |
+| `WARDEN_DEPLOY_LEDGER` | `4635844`, an indexer's starting point; wrong or missing, it either rescans from genesis or misses early events |
 
 {% hint style="warning" %}
 In any Next.js app (`warden-app`, `warden-monitor`'s dashboard), `NEXT_PUBLIC_*`
   variables are inlined into the JavaScript bundle **at build time**, not read at
-  runtime. Changing one and restarting the server does nothing — you need a new build.
+  runtime. Changing one and restarting the server does nothing; you need a new build.
   See `warden-monitor`'s
   [`HOSTING.md`](https://github.com/Femology/warden-monitor/blob/main/HOSTING.md) for
   the full explanation of this failure mode.
@@ -239,13 +239,13 @@ In any Next.js app (`warden-app`, `warden-monitor`'s dashboard), `NEXT_PUBLIC_*`
 
 Every amount in and out of `warden-sdk` is a string like `"150.00"`, never a JS
 `number`. Converting to and from the on-chain `i128` is exact fixed-point string
-arithmetic — it never routes through `parseFloat` or `Number`. Don't parse an amount
+arithmetic, and it never routes through `parseFloat` or `Number`. Don't parse an amount
 yourself; pass the string straight through.
 
 ## "Explain this"
 
 `warden-sdk` v0.4.0 added `buildExplainPrompt`, `validateExplanationResponse`, and
-`fallbackExplanation` — pure, secret-free helpers for the "Explain this" feature both
+`fallbackExplanation`, pure, secret-free helpers for the "Explain this" feature both
 `warden-app` and `warden-monitor` build a server route around. This is deliberately
 **not** an SDK function that calls a model itself; the actual network call (and the
 model API key) belongs entirely in each app's own server-only route, never in this
@@ -270,7 +270,7 @@ const result = explanation ?? fallbackExplanation(input); // never render a null
 
 `validateExplanationResponse` enforces the fixed schema (`summary`, `factors`,
 `next_steps`) exactly, and rejects a response that mentions a `StepUpReason` other than
-the one actually in `input` — the model hallucinating a reason code it was never given.
+the one actually in `input`: the model hallucinating a reason code it was never given.
 Any deviation returns `null`; always fall back to `fallbackExplanation(input)` rather
 than rendering a null result. See `warden-app`'s and `warden-monitor`'s own
 `/api/explain` route source for a complete, real implementation calling Evomap
