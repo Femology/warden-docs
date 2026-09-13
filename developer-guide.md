@@ -9,24 +9,24 @@ Every code sample on this page was run against the real deployed contract
 ## Install
 
 ```bash
-npm install warden-sdk@github:Femology/warden-sdk#v0.4.0
+npm install warden-sdk@github:wardenoss/warden-sdk#v0.4.0
 ```
 
 `warden-sdk` isn't published to npm yet (tracked in
-[warden-sdk#2](https://github.com/Femology/warden-sdk/issues/2)), so install it as a git
+[warden-sdk#2](https://github.com/wardenoss/warden-sdk/issues/2)), so install it as a git
 dependency pinned to a tag, as shown above. ESM only, Node ≥18.
 
 {% hint style="info" %}
 Pin `v0.4.0` or later; earlier tags have real, fixed bugs. `v0.1.2` throws
   `"The transaction has not yet been signed"` on every `submit*` call against a live
   network, regardless of whether you signed correctly (see
-  [warden-sdk#5](https://github.com/Femology/warden-sdk/pull/5)). Before `v0.2.1`,
+  [warden-sdk#5](https://github.com/wardenoss/warden-sdk/pull/5)). Before `v0.2.1`,
   `trustedRecipients` decoded with the wrong keys (a numeric index instead of the actual
   address) and `getPolicy` crashed instead of returning `null` for a wallet with no
-  policy set (see [warden-sdk#7](https://github.com/Femology/warden-sdk/pull/7)). Before
+  policy set (see [warden-sdk#7](https://github.com/wardenoss/warden-sdk/pull/7)). Before
   `v0.3.0`, a doomed write call still produced signable XDR, failing only at submission
   with an opaque `tx_malformed` instead of the real `WardenError`
-  ([warden-sdk#8](https://github.com/Femology/warden-sdk/pull/8)).
+  ([warden-sdk#8](https://github.com/wardenoss/warden-sdk/pull/8)).
 {% endhint %}
 
 ## Configure a client
@@ -73,7 +73,7 @@ hint above.)
 Mutating calls follow a build → sign → submit pattern: `warden-sdk` never signs
 anything itself. This example signs with a plain classic Stellar keypair, the simplest
 case (a real app signs via `passkey-kit` or another wallet signer instead; see
-[`warden-app`](https://github.com/Femology/warden-app) for that full flow).
+[`warden-app`](https://github.com/wardenoss/warden-app) for that full flow).
 
 Note `PortablePolicyRule.trustedRecipients` in the shape below: it's there for symmetry
 with the `Policy` type you read back, but `set_policy` itself has no trusted-recipients
@@ -231,7 +231,7 @@ In any Next.js app (`warden-app`, `warden-monitor`'s dashboard), `NEXT_PUBLIC_*`
   variables are inlined into the JavaScript bundle **at build time**, not read at
   runtime. Changing one and restarting the server does nothing; you need a new build.
   See `warden-monitor`'s
-  [`HOSTING.md`](https://github.com/Femology/warden-monitor/blob/main/HOSTING.md) for
+  [`HOSTING.md`](https://github.com/wardenoss/warden-monitor/blob/main/HOSTING.md) for
   the full explanation of this failure mode.
 {% endhint %}
 

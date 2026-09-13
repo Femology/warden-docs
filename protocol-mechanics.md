@@ -46,7 +46,7 @@ There's a step 0 ahead of everything below: is `recipient` present in the
   admin-managed flagged-address registry? → `RequireStepUp(FlaggedRecipient)`,
   regardless of amount, trust, or velocity headroom, and without consulting any of
   them. See
-  [`WARDEN-PROTOCOL.md`](https://github.com/Femology/warden-contract/blob/main/WARDEN-PROTOCOL.md#the-evaluation-decision)
+  [`WARDEN-PROTOCOL.md`](https://github.com/wardenoss/warden-contract/blob/main/WARDEN-PROTOCOL.md#the-evaluation-decision)
   for the exact, current, full order including this check.
 {% endhint %}
 
@@ -83,7 +83,7 @@ If the recipient is in `trusted_recipients` at all (decayed or not), their
 ### 8. Emit an event and return
 
 `evaluation_allowed` or `stepup_required`, decoded and shown live in
-    [`warden-monitor`](https://github.com/Femology/warden-monitor).
+    [`warden-monitor`](https://github.com/wardenoss/warden-monitor).
 
 
 ## Worked example: a real policy, four real transfers
@@ -161,7 +161,7 @@ moment before that window resets, then spend up to the full cap again right afte
 briefly doubling its effective limit across that boundary. This applies independently
 to both windows. It's an accepted simplification for now; a continuously sliding
 window is a reasonable improvement if it matters for a given deployment's risk
-tolerance. See [warden-contract#3](https://github.com/Femology/warden-contract/issues/3).
+tolerance. See [warden-contract#3](https://github.com/wardenoss/warden-contract/issues/3).
 
 ## Reading a `Decision`
 

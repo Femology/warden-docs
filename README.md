@@ -43,7 +43,7 @@ Step-up is not an error. It's not a rejection, and it's not the app being broken
 Two more things exist alongside the decision itself: a **guardian recovery**
 subsystem (a wallet owner names guardians who can, together and only after a
 timelock, restore a restricted account without the owner's own signature; see
-[`WARDEN-PROTOCOL.md`](https://github.com/Femology/warden-contract/blob/main/WARDEN-PROTOCOL.md)
+[`WARDEN-PROTOCOL.md`](https://github.com/wardenoss/warden-contract/blob/main/WARDEN-PROTOCOL.md)
 for the full state machine), and an **"Explain this"** feature that turns any
 step-up's reason code into a plain-language explanation, grounded strictly in that
 event's own on-chain facts and validated against a fixed schema before it's ever shown.
@@ -87,10 +87,10 @@ Warden is four coordinated repos, each with one job:
 
 | Repo | Job |
 |---|---|
-| [`warden-contract`](https://github.com/Femology/warden-contract) | The policy engine. Decides. Nothing else is allowed to make or override this decision. |
-| [`warden-sdk`](https://github.com/Femology/warden-sdk) | The TypeScript client library. Builds and submits calls. Never signs anything. |
-| [`warden-app`](https://github.com/Femology/warden-app) | The reference wallet. Signs via a WebAuthn passkey and shows the three scenarios end to end. |
-| [`warden-monitor`](https://github.com/Femology/warden-monitor) | Read-only telemetry. Watches what happened. Never decides. |
+| [`warden-contract`](https://github.com/wardenoss/warden-contract) | The policy engine. Decides. Nothing else is allowed to make or override this decision. |
+| [`warden-sdk`](https://github.com/wardenoss/warden-sdk) | The TypeScript client library. Builds and submits calls. Never signs anything. |
+| [`warden-app`](https://github.com/wardenoss/warden-app) | The reference wallet. Signs via a WebAuthn passkey and shows the three scenarios end to end. |
+| [`warden-monitor`](https://github.com/wardenoss/warden-monitor) | Read-only telemetry. Watches what happened. Never decides. |
 
 ## Honest limitations
 

@@ -3,7 +3,7 @@
 {% hint style="info" %}
 Deployed on Stellar Testnet at
   [`CD5QU2E6LOKFAZFESIZSAA4IENH5SZHJVU4Y6532WNZSXPZDYRKEEVUW`](https://stellar.expert/explorer/testnet/contract/CD5QU2E6LOKFAZFESIZSAA4IENH5SZHJVU4Y6532WNZSXPZDYRKEEVUW).
-  Source: [`warden-contract`](https://github.com/Femology/warden-contract).
+  Source: [`warden-contract`](https://github.com/wardenoss/warden-contract).
 {% endhint %}
 
 {% hint style="warning" %}
@@ -15,7 +15,7 @@ This contract has no admin-upgrade function by design, so it's been redeployed a
 {% hint style="info" %}
 This page covers spending-policy functions in full. For the flagged-address registry
   and the guardian/recovery subsystem, see
-  [`WARDEN-PROTOCOL.md`](https://github.com/Femology/warden-contract/blob/main/WARDEN-PROTOCOL.md)
+  [`WARDEN-PROTOCOL.md`](https://github.com/wardenoss/warden-contract/blob/main/WARDEN-PROTOCOL.md)
   in `warden-contract`, the authoritative, language-neutral spec for every function,
   data type, event, and error this contract exposes, including the account state
   diagram and the process for proposing a rule change.
